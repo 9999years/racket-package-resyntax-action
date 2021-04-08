@@ -1,12 +1,30 @@
 #!/usr/bin/env bash
-
 set -ev
-
 cd "$GITHUB_WORKSPACE"
+if [[ -z "$INPUT_NAME" ]]; then
+    INPUT_NAME=$(basename "$GITHUB_REPOSITORY")
+fi
+INPUT_DIRECTORY=$(realpath "$PWD/$INPUT_DIRECTORY")
 
-# Absolutely no idea why GitHub Actions seems convinced this package isn't
-# installed already by this point, but whatever.
-# raco pkg install --batch --auto https://github.com/jackfirth/resyntax.git
+git fetch --depth=1 origin "$GITHUB_BASE_REF"
 
-raco pkg install --name "$INPUT_NAME" --batch --auto --link "$INPUT_DIRECTORY"
-racket -l racket-package-resyntax-action
+GITHUB_BASE_REF="origin/$GITHUB_BASE_REF"
+
+find .git/refs
+
+git status
+
+git branch -v --all
+
+env
+
+xvfb-run -a -e /dev/stdout raco pkg install \
+    --name "$INPUT_NAME" \
+    --batch \
+    --auto \
+    --link \
+    --scope installation \
+    --skip-installed \
+    "$INPUT_DIRECTORY"
+
+xvfb-run racket -l racket-package-resyntax-action

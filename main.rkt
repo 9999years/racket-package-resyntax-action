@@ -16,6 +16,7 @@
          ;  rebellion/type/tuple
          rebellion/private/guarded-block
          resyntax
+         resyntax/refactoring-result
          resyntax/code-snippet
          resyntax/default-recommendations
          resyntax/file-group
@@ -73,7 +74,7 @@
   (guard (not git) then
          (error "couldn't find git executable in PATH"))
   (define-values (proc stdout stdin stderr)
-    (subprocess #f #f #f git "diff" commitish "--name-only" "-z"))
+    (subprocess #f #f #f git "diff" "--name-only" "-z" commitish))
   (close-output-port stdin)
   (subprocess-wait proc)
   (define stdout-string (port->string stdout))
@@ -82,7 +83,7 @@
   (close-input-port stderr)
   (if (zero? (string-length stderr-string))
       (string-split stdout-string "\0")
-      (error stderr-string)))
+      (error (format "git diff failed: ~a" stderr-string))))
 
 (define/guard (git-path path)
   (define git (or (find-executable-path "git")
@@ -100,7 +101,7 @@
   (close-input-port stderr)
   (if (zero? (string-length stderr-string))
       (string-split stdout-string "\0")
-      (error stderr-string)))
+      (error (format "git ls-tree failed: ~a" stderr-string))))
 
 (define (git-ref->pr-number ref)
   (match ref
@@ -224,6 +225,4 @@
       'boop))
 
 (module+ main
-  (parameterize ([github-ref "refs/pull/385/merge"]
-                 [github-base-ref "main"])
-    (resyntax-github-run)))
+    (resyntax-github-run))
