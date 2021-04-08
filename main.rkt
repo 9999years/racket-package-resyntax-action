@@ -219,10 +219,7 @@
   (println (format "~a" req)))
 
 (define (pwease-refactow-me?)
-  (define x #true)
-  (if (eq? x #true)
-      'beep
-      'boop))
+  (or 1 2 (or 3 4)))
 
 (module+ main
     (resyntax-github-run))
