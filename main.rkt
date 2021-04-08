@@ -1,12 +1,14 @@
 #lang racket/base
 
 (require fancy-app
+         racket/list
          racket/match
          racket/string
          racket/port
          net/url
          net/url-connect
          net/head
+         net/unihead
          json
          rebellion/collection/list
          ;  rebellion/collection/vector/builder
@@ -119,7 +121,7 @@
                             #:body body
                             #:event event
                             #:comments comments)
-     (make-immutable-hash `((commit_id . ,commit-id)
+     (make-immutable-hash `(#;(commit_id . ,commit-id)
                             (body . ,body)
                             (event . ,event)
                             (comments . ,(map github-review-comment-jsexpr comments))))]))
@@ -156,25 +158,25 @@
                        (github-repository)
                        (github-review-request-pull-number req))))
 
-(define (hash->headers table)
-  (for/fold ([headers empty-header])
-            ([(k v) (in-hash table)])
-    (insert-field k v headers)))
-
 (define (github-review-request-send req)
-  (define github-review-request-headers
-    (hash->headers (make-immutable-hash
-                    `(("Accept" . "application/vnd.github.comfort-fade-preview+json")
-                      ("Authorization" . ,(format "Bearer ~a" (github-token)))))))
   (parameterize ([current-https-protocol 'secure])
     (define response-port
       (post-pure-port (github-review-request-url req)
                       (jsexpr->bytes (github-review-request-body-jsexpr req))
-                      github-review-request-headers))
-    (define response (string-trim response-port))
+                      `("Accept: application/vnd.github.comfort-fade-preview+json"
+                        ,(format "Authorization: Bearer ~a" (github-token)))))
+    (define response (port->string response-port))
     (close-input-port response-port)
     response))
 
+; thank you jack for this code in the resyntax cli.rkt :)
+(define/guard (string-indent s #:amount amount)
+  (guard (zero? amount) then s)
+  (define indent-string (make-string amount #\space))
+  (define lines
+    (for/list ([line (in-lines (open-input-string s))])
+      (string-append indent-string line)))
+  (string-join lines "\n"))
 
 (define/guard (resyntax-github-run)
   (define filenames (git-diff-names (github-base-ref)))
@@ -192,12 +194,13 @@
       (define new-code-snippet (refactoring-result-new-code result))
       (define start-line (code-snippet-start-line old-code-snippet))
       (define end-line (code-snippet-end-line old-code-snippet))
+      (define start-col (code-snippet-start-column new-code-snippet))
       (define new-code (code-snippet-raw-text new-code-snippet))
       (define body (format "```suggestion\n~a\n```\n\nRule: `~a`\n~a"
-                           new-code
+                           (string-indent new-code #:amount start-col)
                            (refactoring-result-rule-name result)
                            (refactoring-result-message result)))
-      (github-review-comment #:path (git-path path)
+      (github-review-comment #:path (first (git-path path))
                              #:body body
                              #:start-line start-line
                              #:end-line end-line
