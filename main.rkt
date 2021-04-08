@@ -217,6 +217,12 @@
   
   (println (format "~a" req)))
 
+(define (pwease-refactow-me?)
+  (define x #true)
+  (if (eq? x #true)
+      'beep
+      'boop))
+
 (module+ main
   (parameterize ([github-ref "refs/pull/385/merge"]
                  [github-base-ref "main"])
