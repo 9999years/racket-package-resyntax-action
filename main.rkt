@@ -1,17 +1,12 @@
 #lang racket/base
 
-(require fancy-app
-         racket/list
+(require racket/list
          racket/match
          racket/string
          racket/port
          net/url
          net/url-connect
-         net/head
-         net/unihead
          json
-         rebellion/collection/list
-         rebellion/streaming/transducer
          rebellion/type/record
          rebellion/private/guarded-block
          resyntax
@@ -19,10 +14,13 @@
          resyntax/code-snippet
          resyntax/default-recommendations
          resyntax/file-group
-         resyntax/refactoring-suite
          resyntax/source)
 
 ; https://docs.github.com/en/actions/reference/environment-variables#default-environment-variables
+
+; TODO: I implemented the github-* parameters as parameters bc that's easy and makes sense, but
+; several of these don't really make sense as parameters -- some of these are specific to runs for pull
+; requests, for example, and this code would ideally be more generic.
 
 ; https://docs.github.com/en/actions/reference/authentication-in-a-workflow#about-the-github_token-secret
 (define github-token
@@ -62,14 +60,15 @@
 (define github-api-url
   (make-parameter (getenv "GITHUB_API_URL") #f 'github-api-url))
 
-(define/guard (run-cmd cmd-name args ...)
+; This doesn't support anything but getting stdout -- but that's OK for now!
+(define/guard (run-cmd cmd-name . args)
   (define cmd-path (or (find-executable-path cmd-name)
                        ; Racket doesn't know about $PATHEXT:
                        (find-executable-path (string-append ".exe"))))
   (guard (not cmd-path) then
          (error (format "couldn't find ~a executable in PATH" cmd-name)))
   (define-values (proc stdout stdin stderr)
-    (subprocess #f #f #f cmd-path . args))
+    (apply subprocess `(#f #f #f ,cmd-path ,@args)))
   (close-output-port stdin)
   (subprocess-wait proc)
   (define exit-code (subprocess-status proc))
@@ -164,14 +163,13 @@
       (string-append indent-string line)))
   (string-join lines "\n"))
 
-(define/guard (resyntax-github-run)
+(define (resyntax-github-run)
   (define filenames (git-diff-names (github-base-ref)))
   (define files (file-groups-resolve (map single-file-group filenames)))
   (printf "resyntax: --- analyzing code ---\n")
   (define results
-    (transduce files
-               (append-mapping (refactor-file _ #:suite default-recommendations))
-               #:into into-list))
+    (map (λ (file) (refactor-file file #:suite default-recommendations))
+         files))
   
   (define comments
     (for/list ([result (in-list results)])
