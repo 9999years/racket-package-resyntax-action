@@ -8,6 +8,8 @@
          net/url-connect
          json
          rebellion/type/record
+         rebellion/collection/list
+         rebellion/streaming/transducer
          rebellion/private/guarded-block
          resyntax
          resyntax/refactoring-result
@@ -128,12 +130,17 @@
                             #:end-line end-line
                             #:start-side start-side
                             #:end-side end-side)
-     (make-immutable-hash `((path . ,path)
-                            (body . ,body)
-                            (start_line . ,start-line)
-                            (line . ,end-line)
-                            (start_side . ,start-side)
-                            (side . ,end-side)))]))
+     (if (= start-line end-line)
+         (hash 'path path
+               'body body
+               'line end-line
+               'side end-side)
+         (hash 'path path
+               'body body
+               'start_line start-line
+               'line end-line
+               'start_side start-side
+               'side end-side))]))
 
 ; https://docs.github.com/en/rest/reference/pulls#create-a-review-for-a-pull-request
 (define (github-review-request-url req)
@@ -168,8 +175,9 @@
   (define files (file-groups-resolve (map single-file-group filenames)))
   (printf "resyntax: --- analyzing code ---\n")
   (define results
-    (map (λ (file) (refactor-file file #:suite default-recommendations))
-         files))
+    (transduce files
+               (append-mapping (λ (file) (refactor-file file #:suite default-recommendations)))
+               #:into into-list))
   
   (define comments
     (for/list ([result (in-list results)])
@@ -211,4 +219,4 @@
   (or 1 2 (or 3 4)))
 
 (module+ main
-    (resyntax-github-run))
+  (resyntax-github-run))
